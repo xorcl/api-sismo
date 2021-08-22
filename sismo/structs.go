@@ -11,7 +11,9 @@ type Response struct {
 }
 
 type Event struct {
+	ID           string     `json:"id"`
 	URL          string     `json:"url"`
+	MapURL       string     `json:"map_url"`
 	LocalDate    string     `json:"local_date"`
 	UTCDate      string     `json:"utc_date"`
 	Latitude     float64    `json:"latitude"`

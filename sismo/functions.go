@@ -1,6 +1,7 @@
 package sismo
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -57,7 +58,15 @@ func ParseEvents(response *Response, url string, c *gin.Context) {
 					logrus.Error("error parsing event url: %s", err)
 					return
 				}
+				urlComponents := strings.Split(link, "/")
 				event.URL = BASE_URL + link
+				event.ID = strings.Split(urlComponents[len(urlComponents)-1], ".")[0]
+				event.MapURL = fmt.Sprintf(
+					"%s%s/map_img/%s.jpeg",
+					BASE_URL,
+					strings.Join(urlComponents[:len(urlComponents)-1], "/"),
+					event.ID,
+				)
 				date := strings.TrimSpace(s.Text())
 				event.LocalDate = strings.TrimSpace(date)
 			case 1: // UTC Date
