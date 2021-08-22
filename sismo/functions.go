@@ -17,7 +17,7 @@ func ParseEvents(response *Response, url string, c *gin.Context) {
 	}
 	intMagnitude, err := strconv.Atoi(magnitude[0])
 	if err != nil {
-		response.SetStatus(21)
+		response.SetStatus(12)
 		logrus.WithFields(logrus.Fields{
 			"error": response.StatusDescription,
 		}).Error(err)

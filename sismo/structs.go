@@ -31,12 +31,11 @@ type ErrorCode int
 var Errors = map[ErrorCode]string{
 	0:  "Información obtenida satisfactoriamente",
 	10: "Error indeterminado al interpretar parámetro",
-	11: "Parámetro Obligatorio fecha-sismo mal formado",
-	12: "Parámetro Opcional Magnitude mal formado",
-	20: "Error indeterminado al parsear información desde Sismología",
+	11: "Parámetro Obligatorio event-date mal formado",
+	12: "Parámetro Opcional magnitude mal formado",
+	20: "Error indeterminado al interpretar información desde Sismología",
 	21: "Sismología no contesta",
 	22: "Sismología contesta, pero no entrega información interpretable",
-	23: "Imposible interpretar valor de eventos",
 }
 
 func (br *Response) SetStatus(code ErrorCode) {
