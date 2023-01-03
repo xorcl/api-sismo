@@ -8,9 +8,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const HISTORIC_URL = BASE_URL + "/catalogo/%04d/%02d/%04d%02d%02d.html"
-const DATE_FORMAT = "20060102"
-
 type HistoricParser struct{}
 
 func (bp *HistoricParser) GetRoute() string {
@@ -37,7 +34,7 @@ func (bp *HistoricParser) Parse(c *gin.Context) {
 		c.JSON(400, &response)
 		return
 	}
-	ParseEvents(response, url, c)
+	ParseEvents(response, []string{url}, c)
 }
 
 func getURLByDate(date string) (string, error) {

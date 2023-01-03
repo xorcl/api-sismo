@@ -11,10 +11,15 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func ParseEvents(response *Response, url string, c *gin.Context) {
+func ParseEvents(response *Response, urls []string, c *gin.Context) {
+	events := make([]Event, 0)
 	magnitude, ok := c.Request.URL.Query()["magnitude"]
 	if !ok || len(magnitude) == 0 {
 		magnitude = []string{"0"}
+	}
+	limit, ok := c.Request.URL.Query()["limit"]
+	if !ok || len(limit) == 0 {
+		limit = []string{"0"}
 	}
 	intMagnitude, err := strconv.Atoi(magnitude[0])
 	if err != nil {
@@ -25,100 +30,117 @@ func ParseEvents(response *Response, url string, c *gin.Context) {
 		c.JSON(500, &response)
 		return
 	}
-	resp, err := http.Get(url)
+	intLimit, err := strconv.Atoi(limit[0])
 	if err != nil {
-		response.SetStatus(21)
+		response.SetStatus(12)
 		logrus.WithFields(logrus.Fields{
 			"error": response.StatusDescription,
 		}).Error(err)
 		c.JSON(500, &response)
 		return
 	}
-	defer resp.Body.Close()
-	doc, err := goquery.NewDocumentFromReader(resp.Body)
-	if err != nil {
-		response.SetStatus(20)
-		logrus.WithFields(logrus.Fields{
-			"error": response.StatusDescription,
-		}).Error(err)
-		c.JSON(500, &response)
-		return
-	}
-	events := make([]Event, 0)
-	doc.Find(TABLE_SELECTOR).Each(func(i int, s *goquery.Selection) {
-		if i == 0 {
-			return // skip header
+	for _, url := range urls {
+
+		resp, err := http.Get(url)
+		if err != nil {
+			response.SetStatus(21)
+			logrus.WithFields(logrus.Fields{
+				"error": response.StatusDescription,
+			}).Error(err)
+			c.JSON(500, &response)
+			return
 		}
-		event := Event{}
-		s.Find("td").Each(func(j int, s *goquery.Selection) {
-			switch j {
-			case 0: // Local date and URL
-				link, ok := s.Find("a").Attr("href")
-				if !ok {
-					logrus.Error("error parsing event url: %s", err)
-					return
-				}
-				urlComponents := strings.Split(link, "/")
-				event.URL = BASE_URL + link
-				event.ID = strings.Split(urlComponents[len(urlComponents)-1], ".")[0]
-				event.MapURL = fmt.Sprintf(
-					"%s%s/map_img/%s.jpeg",
-					BASE_URL,
-					strings.Join(urlComponents[:len(urlComponents)-1], "/"),
-					event.ID,
-				)
-				date := strings.TrimSpace(s.Text())
-				event.LocalDate = strings.TrimSpace(date)
-			case 1: // UTC Date
-				date := strings.TrimSpace(s.Text())
-				event.UTCDate = strings.TrimSpace(date)
-			case 2: // Latitude
-				latitude := strings.TrimSpace(s.Text())
-				floatLatitude, err := strconv.ParseFloat(latitude, 64)
-				if err != nil {
-					logrus.Error("error parsing latitude: %s", err)
-					return
-				}
-				event.Latitude = floatLatitude
-			case 3: // Longitude
-				longitude := strings.TrimSpace(s.Text())
-				floatLongitude, err := strconv.ParseFloat(longitude, 64)
-				if err != nil {
-					logrus.Error("error parsing longitude: %s", err)
-					return
-				}
-				event.Longitude = floatLongitude
-			case 4: // Depth
-				depth := strings.TrimSpace(s.Text())
-				floatDepth, err := strconv.ParseFloat(depth, 64)
-				if err != nil {
-					logrus.Error("error parsing depth: %s", err)
-					return
-				}
-				event.Depth = floatDepth
-			case 5: // Magnitude
-				magnitude := strings.TrimSpace(s.Text())
-				magnitudeArr := strings.Split(magnitude, " ")
-				if len(magnitudeArr) != 2 {
-					logrus.Error("error parsing magnitude: malformed field %s", magnitude)
-					return
-				}
-				floatMagnitude, err := strconv.ParseFloat(magnitudeArr[0], 64)
-				if err != nil {
-					logrus.Error("error parsing magnitude: %s", err)
-					return
-				}
-				event.Magnitude = &Magnitude{
-					Value:       floatMagnitude,
-					MeasureUnit: magnitudeArr[1],
-				}
-			case 6: // Geographic Reference
-				georeference := strings.TrimSpace(s.Text())
-				event.GeoReference = strings.TrimSpace(georeference)
+		defer resp.Body.Close()
+		doc, err := goquery.NewDocumentFromReader(resp.Body)
+		if err != nil {
+			response.SetStatus(20)
+			logrus.WithFields(logrus.Fields{
+				"error": response.StatusDescription,
+			}).Error(err)
+			c.JSON(500, &response)
+			return
+		}
+		doc.Find(TABLE_SELECTOR).Each(func(i int, s *goquery.Selection) {
+			if i < 2 {
+				return // skip header and search field
 			}
+			event := Event{}
+			s.Find("td").Each(func(j int, s *goquery.Selection) {
+				switch j {
+				case 0: // Local date, URL and Geo Reference
+					link, ok := s.Find("a").Attr("href")
+					if !ok {
+						logrus.Errorf("error parsing event url: %s", err)
+						return
+					}
+					urlComponents := strings.Split(link, "/")
+					event.URL = BASE_URL + link
+					event.ID = strings.Split(urlComponents[len(urlComponents)-1], ".")[0]
+					event.MapURL = fmt.Sprintf(
+						"%s%s/map_img/%s.jpeg",
+						BASE_URL,
+						strings.Join(urlComponents[:len(urlComponents)-1], "/"),
+						event.ID,
+					)
+					dateLocation := strings.TrimSpace(s.Text())
+					event.LocalDate = strings.TrimSpace(dateLocation[:19])
+					event.GeoReference = strings.TrimSpace(dateLocation[19:])
+				case 1: // UTC Date
+					date := strings.TrimSpace(s.Text())
+					event.UTCDate = strings.TrimSpace(date)
+				case 2: // Latitude and Longitude
+					latLng := strings.Split(strings.TrimSpace(s.Text()), " ")
+					if len(latLng) != 2 {
+						logrus.Errorf("error parsing latitude and longitude: %s", s.Text())
+						return
+					}
+					latitude := strings.TrimSpace(latLng[0])
+					floatLatitude, err := strconv.ParseFloat(latitude, 64)
+					if err != nil {
+						logrus.Errorf("error parsing latitude: %s", err)
+						return
+					}
+					event.Latitude = floatLatitude
+					longitude := strings.TrimSpace(latLng[1])
+					floatLongitude, err := strconv.ParseFloat(longitude, 64)
+					if err != nil {
+						logrus.Errorf("error parsing longitude: %s", err)
+						return
+					}
+					event.Longitude = floatLongitude
+				case 3: // Depth
+					depthArr := strings.Split(strings.TrimSpace(s.Text()), " ")
+					if len(depthArr) != 2 {
+						logrus.Errorf("error parsing latitude and longitude: %s", s.Text())
+						return
+					}
+					floatDepth, err := strconv.ParseFloat(depthArr[0], 64)
+					if err != nil {
+						logrus.Errorf("error parsing depth: %s", err)
+						return
+					}
+					event.Depth = floatDepth
+				case 4: // Magnitude
+					magnitude := strings.TrimSpace(s.Text())
+					magnitudeArr := strings.Split(magnitude, " ")
+					if len(magnitudeArr) != 2 {
+						logrus.Errorf("error parsing magnitude: malformed field %s", magnitude)
+						return
+					}
+					floatMagnitude, err := strconv.ParseFloat(magnitudeArr[0], 64)
+					if err != nil {
+						logrus.Errorf("error parsing magnitude: %s", err)
+						return
+					}
+					event.Magnitude = &Magnitude{
+						Value:       floatMagnitude,
+						MeasureUnit: magnitudeArr[1],
+					}
+				}
+			})
+			events = append(events, event)
 		})
-		events = append(events, event)
-	})
+	}
 	if intMagnitude != 0 {
 		filteredEvents := make([]Event, 0)
 		for _, event := range events {
@@ -127,6 +149,9 @@ func ParseEvents(response *Response, url string, c *gin.Context) {
 			}
 		}
 		events = filteredEvents
+	}
+	if intLimit > 0 && intLimit < len(events) {
+		events = events[:intLimit]
 	}
 	response.Events = events
 	response.SetStatus(0)

@@ -1,10 +1,11 @@
 package sismo
 
 import (
+	"fmt"
+	"time"
+
 	"github.com/gin-gonic/gin"
 )
-
-const RECENT_URL = BASE_URL + "/ultimos_sismos.html"
 
 type RecentParser struct{}
 
@@ -14,5 +15,11 @@ func (bp *RecentParser) GetRoute() string {
 
 func (bp *RecentParser) Parse(c *gin.Context) {
 	response := &Response{}
-	ParseEvents(response, RECENT_URL, c)
+	today := time.Now()
+	yesterday := today.AddDate(0, 0, -1)
+	recentUrls := []string{
+		fmt.Sprintf(HISTORIC_URL, today.Year(), today.Month(), today.Year(), today.Month(), today.Day()),
+		fmt.Sprintf(HISTORIC_URL, yesterday.Year(), yesterday.Month(), yesterday.Year(), yesterday.Month(), yesterday.Day()),
+	}
+	ParseEvents(response, recentUrls, c)
 }

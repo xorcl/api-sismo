@@ -2,6 +2,8 @@ package sismo
 
 const BASE_URL = "http://sismologia.cl"
 const TABLE_SELECTOR = "table tr"
+const HISTORIC_URL = BASE_URL + "/sismicidad/catalogo/%04d/%02d/%04d%02d%02d.html"
+const DATE_FORMAT = "20060102"
 
 type Response struct {
 	StatusCode        ErrorCode `json:"status_code"`
